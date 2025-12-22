@@ -31,14 +31,16 @@ def get_task_vector(
         for shape in shapes[1:]:
             for i in range(len(min_shape)):
                 min_shape[i] = min(min_shape[i], shape[i])
-        
+
         # Slice all tensors to the minimum shape
         slices = tuple(slice(0, s) for s in min_shape)
         base_model_parameters = base_model_parameters[slices]
         ft_models_parameters = [p[slices] for p in ft_models_parameters]
-        
-        print(f"  ⚠️  Vocabulary size mismatch detected. Using common vocabulary size: {min_shape}")
-    
+
+        print(
+            f"  ⚠️  Vocabulary size mismatch detected. Using common vocabulary size: {min_shape}"
+        )
+
     # Stack fine-tuned model parameters for vectorized computation
     ft_params_stacked = torch.stack(ft_models_parameters)
     task_vectors_stacked = ft_params_stacked - base_model_parameters.unsqueeze(0)
