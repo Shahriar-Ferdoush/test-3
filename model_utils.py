@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
 
 def get_llama(model_path, load_4bit=False, device="cpu"):
     """Load a LLaMA model from the given path.
 
     Args:
-        model_path: Path to the model
+        model_path: Path to the model or HF model ID
         load_4bit: If True, load model in 4-bit quantization (requires bitsandbytes)
         device: Device to load model on (used only when load_4bit=False)
 
@@ -25,10 +25,15 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
 
     if load_4bit:
         # Load model in 4-bit to save memory (requires bitsandbytes)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
+        bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            quantization_config=bnb_config,
             device_map="auto",
             low_cpu_mem_usage=True,
         )
