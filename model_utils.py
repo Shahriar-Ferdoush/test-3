@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
@@ -23,6 +24,10 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
     torch.nn.init.uniform_ = skip
     torch.nn.init.normal_ = skip
 
+    # detect local path vs HF repo id; for local paths use local_files_only to avoid
+    # HuggingFace hub repo-id validation errors when path starts with '/'
+    is_local = os.path.exists(model_path)
+
     if load_4bit:
         # Load model in 4-bit to save memory (requires bitsandbytes)
         bnb_config = BitsAndBytesConfig(
@@ -36,6 +41,7 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
             quantization_config=bnb_config,
             device_map="auto",
             low_cpu_mem_usage=True,
+            local_files_only=is_local,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
@@ -43,6 +49,7 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
             torch_dtype=torch.float16,
             device_map={"": device},
             low_cpu_mem_usage=True,
+            local_files_only=is_local,
         )
 
     model.seqlen = 2048
