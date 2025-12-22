@@ -2,8 +2,8 @@ from typing import Callable, List, Literal, Optional, Tuple, Union
 
 import torch
 
-from .dare_utils import DARE
-from .ties_utils import TIES
+from dare_utils import DARE
+from ties_utils import TIES
 
 MODEL_MERGERS = Literal["ties", "dare"]
 

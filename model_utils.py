@@ -5,13 +5,23 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
 
-def get_llama(model_path, load_4bit=False, device="cpu"):
+def get_llama(
+    model_path,
+    load_4bit: bool = False,
+    device: str = "cpu",
+    torch_dtype: torch.dtype = torch.float16,
+    low_cpu_mem_usage: bool | None = None,
+):
     """Load a LLaMA model from the given path.
 
     Args:
         model_path: Path to the model or HF model ID
         load_4bit: If True, load model in 4-bit quantization (requires bitsandbytes)
         device: Device to load model on (used only when load_4bit=False)
+        torch_dtype: dtype to load weights into (Transformers arg name is torch_dtype)
+        low_cpu_mem_usage: If None, choose a safe default:
+            - CPU: False (avoids meta-tensor edge cases during preprocessing)
+            - non-CPU: True
 
     Returns:
         Loaded model
@@ -32,11 +42,14 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
     device_str = str(device)
     is_cpu = device_str == "cpu" or device_str.startswith("cpu")
 
+    if low_cpu_mem_usage is None:
+        low_cpu_mem_usage = False if is_cpu else True
+
     if load_4bit:
         # Load model in 4-bit to save memory (requires bitsandbytes)
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_compute_dtype=torch_dtype,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
@@ -44,24 +57,26 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
             model_path,
             quantization_config=bnb_config,
             device_map="auto",
-            low_cpu_mem_usage=True,
+            low_cpu_mem_usage=low_cpu_mem_usage,
             local_files_only=is_local,
+            torch_dtype=torch_dtype,
         )
     else:
+        # On CPU: avoid device_map and (by default) avoid low_cpu_mem_usage to prevent meta leftovers
         if is_cpu:
             model = AutoModelForCausalLM.from_pretrained(
                 model_path,
-                dtype=torch.float16,
+                torch_dtype=torch_dtype,
                 device_map=None,
-                low_cpu_mem_usage=True,
+                low_cpu_mem_usage=low_cpu_mem_usage,
                 local_files_only=is_local,
             )
         else:
             model = AutoModelForCausalLM.from_pretrained(
                 model_path,
-                dtype=torch.float16,
+                torch_dtype=torch_dtype,
                 device_map={"": device_str},
-                low_cpu_mem_usage=True,
+                low_cpu_mem_usage=low_cpu_mem_usage,
                 local_files_only=is_local,
             )
 

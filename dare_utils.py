@@ -2,7 +2,7 @@ from typing import List, Optional
 
 import torch
 
-from .ties_utils import get_task_vector
+from ties_utils import get_task_vector
 
 
 def drop_and_rescale(
