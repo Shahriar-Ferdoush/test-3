@@ -110,7 +110,12 @@ def dare_merge_llama(
         densities=densities,
         device=dev,
     )
-    base_model.lm_head.weight.data = merged_lm_head
+    
+    # Handle vocabulary size mismatch: only update the merged portion
+    if merged_lm_head.shape != base_lm_head.shape:
+        base_model.lm_head.weight.data[:merged_lm_head.shape[0], :merged_lm_head.shape[1]] = merged_lm_head
+    else:
+        base_model.lm_head.weight.data = merged_lm_head
 
     print("DARE merging completed!")
     return base_model
