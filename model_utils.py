@@ -87,6 +87,87 @@ def dequantize_model(model):
     model.apply(_dequantize_module)
 
 
+def replace_linear4bit_with_linear(model):
+    """
+    Replace all Linear4bit (bitsandbytes quantized) modules with standard nn.Linear.
+    This ensures the model can be saved and loaded without bitsandbytes dependencies.
+
+    Args:
+        model: Model to convert (modified in-place)
+    """
+    import torch.nn as nn
+
+    replacements = []
+
+    # Find all modules that need replacement
+    for name, module in model.named_modules():
+        # Check if it's a bitsandbytes Linear4bit module
+        if (
+            module.__class__.__name__ in ["Linear4bit", "Linear8bitLt"]
+            or "bitsandbytes" in module.__class__.__module__
+        ):
+            replacements.append((name, module))
+
+    # Replace each quantized module with standard Linear
+    for name, old_module in replacements:
+        # Get module attributes
+        in_features = (
+            old_module.in_features
+            if hasattr(old_module, "in_features")
+            else old_module.weight.shape[1]
+        )
+        out_features = (
+            old_module.out_features
+            if hasattr(old_module, "out_features")
+            else old_module.weight.shape[0]
+        )
+        has_bias = old_module.bias is not None
+
+        # Create new standard Linear module
+        new_module = nn.Linear(in_features, out_features, bias=has_bias)
+
+        # Copy weights (dequantize if needed)
+        if hasattr(old_module, "weight"):
+            with torch.no_grad():
+                weight_data = old_module.weight.data
+                # Ensure weight is FP16 tensor
+                if not isinstance(
+                    weight_data, torch.Tensor
+                ) or weight_data.dtype not in [torch.float16, torch.float32]:
+                    try:
+                        weight_data = weight_data.to(torch.float16)
+                    except:
+                        # If conversion fails, try dequantization
+                        if hasattr(old_module, "dequantize"):
+                            old_module.dequantize()
+                        weight_data = old_module.weight.data.to(torch.float16)
+
+                new_module.weight.data = weight_data.clone().to(torch.float16)
+
+        # Copy bias if exists
+        if has_bias and old_module.bias is not None:
+            with torch.no_grad():
+                new_module.bias.data = old_module.bias.data.clone().to(torch.float16)
+
+        # Replace the module in the model
+        parent_name = ".".join(name.split(".")[:-1])
+        child_name = name.split(".")[-1]
+
+        if parent_name:
+            parent = model.get_submodule(parent_name)
+        else:
+            parent = model
+
+        setattr(parent, child_name, new_module)
+
+    if replacements:
+        print(
+            f"✓ Replaced {len(replacements)} quantized modules with standard nn.Linear"
+        )
+
+    return model
+
+
 def find_layers(module, layers=[nn.Linear], name=""):
     """
     Recursively find all layers of specified types within a module.

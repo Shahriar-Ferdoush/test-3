@@ -12,6 +12,8 @@ def get_task_vector(
     Computes the task vector as the difference between the adapted model parameters
     and the base model parameters.
 
+    NOTE: All tensors must have identical shapes. Use model_prep.py to align models first.
+
     Args:
         base_model_parameters (torch.Tensor): The parameters of the base model.
         ft_models_parameters (List[torch.Tensor]): List of parameters from different fine-tuned models.
@@ -22,25 +24,6 @@ def get_task_vector(
             - List of parameter differences (task vectors) for each fine-tuned model.
             - Base model parameters.
     """
-    # Check if all tensors have the same shape (handle vocabulary size mismatches)
-    shapes = [base_model_parameters.shape] + [p.shape for p in ft_models_parameters]
-    if not all(s == shapes[0] for s in shapes):
-        # Handle vocabulary size mismatch (common in LM heads)
-        # Find the minimum size along each dimension
-        min_shape = list(shapes[0])
-        for shape in shapes[1:]:
-            for i in range(len(min_shape)):
-                min_shape[i] = min(min_shape[i], shape[i])
-
-        # Slice all tensors to the minimum shape
-        slices = tuple(slice(0, s) for s in min_shape)
-        base_model_parameters = base_model_parameters[slices]
-        ft_models_parameters = [p[slices] for p in ft_models_parameters]
-
-        print(
-            f"  ⚠️  Vocabulary size mismatch detected. Using common vocabulary size: {min_shape}"
-        )
-
     # Stack fine-tuned model parameters for vectorized computation
     ft_params_stacked = torch.stack(ft_models_parameters)
     task_vectors_stacked = ft_params_stacked - base_model_parameters.unsqueeze(0)

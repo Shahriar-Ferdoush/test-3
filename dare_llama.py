@@ -4,6 +4,7 @@ from typing import List
 import torch
 
 from dare_utils import DARE
+from model_prep import prepare_models_for_merging
 from model_utils import dequantize_model, find_layers, get_llama
 
 
@@ -17,7 +18,12 @@ def dare_merge_llama(
 ):
     """
     Merge multiple fine-tuned LLaMA models using DARE method.
-    Processes model layer-by-layer similar to SparseGPT approach.
+
+    Pure merging logic - assumes models are preprocessed and aligned.
+    Use model_prep.prepare_models_for_merging() first if models have:
+    - Different vocabulary sizes
+    - Quantization
+    - Mismatched dtypes
 
     Args:
         base_model_path: Path to the base model
@@ -56,6 +62,10 @@ def dare_merge_llama(
             dequantize_model(model)
         model.eval()
         ft_models.append(model)
+
+    # === Preprocessing: Align models ===
+    print("\nPreprocessing models...")
+    base_model, ft_models = prepare_models_for_merging(base_model, ft_models)
 
     # Initialize DARE merger
     dare = DARE()
@@ -111,15 +121,9 @@ def dare_merge_llama(
         device=dev,
     )
 
-    # Handle vocabulary size mismatch: only update the merged portion
-    if merged_lm_head.shape != base_lm_head.shape:
-        base_model.lm_head.weight.data[
-            : merged_lm_head.shape[0], : merged_lm_head.shape[1]
-        ] = merged_lm_head
-    else:
-        base_model.lm_head.weight.data = merged_lm_head
+    base_model.lm_head.weight.data = merged_lm_head
 
-    print("DARE merging completed!")
+    print("✓ DARE merging completed!")
     return base_model
 
 
