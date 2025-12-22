@@ -29,6 +29,9 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
     # HuggingFace hub repo-id validation errors when path starts with '/'
     is_local = os.path.exists(model_path)
 
+    device_str = str(device)
+    is_cpu = device_str == "cpu" or device_str.startswith("cpu")
+
     if load_4bit:
         # Load model in 4-bit to save memory (requires bitsandbytes)
         bnb_config = BitsAndBytesConfig(
@@ -45,13 +48,22 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
             local_files_only=is_local,
         )
     else:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            dtype=torch.float16,
-            device_map={"": device},
-            low_cpu_mem_usage=True,
-            local_files_only=is_local,
-        )
+        if is_cpu:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch.float16,
+                device_map=None,
+                low_cpu_mem_usage=True,
+                local_files_only=is_local,
+            )
+        else:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch.float16,
+                device_map={"": device_str},
+                low_cpu_mem_usage=True,
+                local_files_only=is_local,
+            )
 
     model.seqlen = 2048
     return model
