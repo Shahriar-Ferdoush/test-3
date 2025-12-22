@@ -124,6 +124,11 @@ def dare_merge_llama(
     base_model.lm_head.weight.data = merged_lm_head
 
     print("✓ DARE merging completed!")
+    
+    # Ensure all parameters are materialized (not meta tensors) before returning
+    print("Materializing model to device...")
+    base_model = base_model.to(device)
+    
     return base_model
 
 

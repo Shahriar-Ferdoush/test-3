@@ -47,7 +47,7 @@ def get_llama(model_path, load_4bit=False, device="cpu"):
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.float16,
+            dtype=torch.float16,
             device_map={"": device},
             low_cpu_mem_usage=True,
             local_files_only=is_local,
