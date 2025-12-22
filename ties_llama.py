@@ -105,8 +105,8 @@ def ties_merge_llama(
                 device=dev,
             )
 
-            # Write merged weights back
-            subset[name].weight.data = merged_weights
+            # Write merged weights back, ensuring contiguous and on correct device
+            subset[name].weight.data = merged_weights.contiguous().to(device)
 
     # === Merge LM head ===
     print("Merging LM head...")
@@ -120,14 +120,10 @@ def ties_merge_llama(
         densities=densities,
         device=dev,
     )
-    base_model.lm_head.weight.data = merged_lm_head
+    # Ensure merged tensor is contiguous and on correct device before assignment
+    base_model.lm_head.weight.data = merged_lm_head.contiguous().to(device)
 
     print("✓ TIES merging completed!")
-    
-    # Ensure all parameters are materialized (not meta tensors) before returning
-    print("Materializing model to device...")
-    base_model = base_model.to(device)
-    
     return base_model
 
 
