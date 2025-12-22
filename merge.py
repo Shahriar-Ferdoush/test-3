@@ -1,7 +1,9 @@
-import torch
 from typing import Callable, List, Literal, Optional, Tuple, Union
-from .ties_utils import TIES
+
+import torch
+
 from .dare_utils import DARE
+from .ties_utils import TIES
 
 MODEL_MERGERS = Literal["ties", "dare"]
 
@@ -12,12 +14,10 @@ MERGER_CLASSES = {
     "dare": DARE,
 }
 
+
 class Merge:
     def __init__(
-        self,
-        merger: MODEL_MERGERS = "ties",
-        config: Optional[dict] = None,
-        **kwargs
+        self, merger: MODEL_MERGERS = "ties", config: Optional[dict] = None, **kwargs
     ):
         """
         Initialize a model merger.
@@ -32,12 +32,16 @@ class Merge:
         self.merger = MERGER_CLASSES[merger](config=config)
 
     def merge(
-        self, 
-        weights: List[float],                       # weights for each task vector
-        base_model_parameters: torch.Tensor,        # parameters of the base model
-        ft_models_parameters: List[torch.Tensor],   # list of parameters from different adapted models
-        densities: List[float],                     # list of densities for trimming each task vector
-        device: Optional[torch.device] = None,      # device to perform computations on. If None, uses current device
+        self,
+        weights: List[float],  # weights for each task vector
+        base_model_parameters: torch.Tensor,  # parameters of the base model
+        ft_models_parameters: List[
+            torch.Tensor
+        ],  # list of parameters from different adapted models
+        densities: List[float],  # list of densities for trimming each task vector
+        device: Optional[
+            torch.device
+        ] = None,  # device to perform computations on. If None, uses current device
         **kwargs
     ) -> torch.Tensor:
         """
@@ -50,7 +54,7 @@ class Merge:
             densities (List[float]): List of densities for trimming each task vector.
             device (torch.device, optional): Device to perform computations on. If None, uses current device.
             **kwargs: Additional arguments to pass to the merger's merge method.
-        
+
         Returns:
             torch.Tensor: The merged model parameters.
         """

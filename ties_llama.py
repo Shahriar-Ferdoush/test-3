@@ -13,6 +13,7 @@ def ties_merge_llama(
     weights: List[float],
     densities: List[float],
     device: str = "cuda",
+    use_fp16: bool = False,
 ):
     """
     Merge multiple fine-tuned LLaMA models using TIES method.
@@ -24,27 +25,37 @@ def ties_merge_llama(
         weights: List of weights for each fine-tuned model
         densities: List of densities for trimming each task vector
         device: Device to use for computation
+        use_fp16: If True, load models directly in FP16 (for preprocessed models).
+                  If False, load in 4-bit and dequantize (default behavior).
 
     Returns:
         Merged LLaMA model
     """
     # === Load base model ===
-    print("Loading base model in 4-bit...")
-    base_model = get_llama(base_model_path, load_4bit=True, device=device)
+    if use_fp16:
+        print("Loading base model in FP16 (preprocessed)...")
+        base_model = get_llama(base_model_path, load_4bit=False, device=device)
+    else:
+        print("Loading base model in 4-bit...")
+        base_model = get_llama(base_model_path, load_4bit=True, device=device)
+        print("Dequantizing base model...")
+        dequantize_model(base_model)
     base_model.eval()
-    print("Dequantizing base model...")
-    dequantize_model(base_model)
 
     # === Load all fine-tuned models ===
-    print(f"Loading {len(ft_model_paths)} fine-tuned models in 4-bit...")
-    ft_models = [
-        get_llama(path, load_4bit=True, device=device) for path in ft_model_paths
-    ]
-    for model in ft_models:
+    print(f"Loading {len(ft_model_paths)} fine-tuned models...")
+    ft_models = []
+    for ft_path in ft_model_paths:
+        if use_fp16:
+            print(f"  → Loading {ft_path} in FP16 (preprocessed)...")
+            model = get_llama(ft_path, load_4bit=False, device=device)
+        else:
+            print(f"  → Loading {ft_path} in 4-bit...")
+            model = get_llama(ft_path, load_4bit=True, device=device)
+            print(f"  → Dequantizing {ft_path}...")
+            dequantize_model(model)
         model.eval()
-    print("Dequantizing fine-tuned models...")
-    for model in ft_models:
-        dequantize_model(model)
+        ft_models.append(model)
 
     # Initialize TIES merger
     ties = TIES()
