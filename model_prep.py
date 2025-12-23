@@ -3,9 +3,7 @@ Model Preprocessing Utilities
 
 Handles all model preparation tasks before merging:
 - Vocabulary size alignment
-- Quantization removal
-- Weight type conversion
-- Model validation
+- Weight type conversion (FP16)
 
 All preprocessing happens here, so merge functions can be pure.
 """
@@ -13,7 +11,6 @@ All preprocessing happens here, so merge functions can be pure.
 from typing import List, Tuple
 
 import torch
-import torch.nn as nn
 from transformers import PreTrainedModel
 
 
@@ -66,70 +63,6 @@ def align_vocab_sizes(
     return base_model, ft_models
 
 
-def remove_quantization(model: PreTrainedModel) -> PreTrainedModel:
-    """
-    Replace all quantized modules with standard nn.Linear.
-    Ensures model can be saved/loaded without bitsandbytes.
-
-    Args:
-        model: Model to convert
-
-    Returns:
-        Model with all quantized modules replaced
-    """
-    replacements = []
-
-    # Find quantized modules
-    for name, module in model.named_modules():
-        if (
-            module.__class__.__name__ in ["Linear4bit", "Linear8bitLt"]
-            or "bitsandbytes" in module.__class__.__module__
-        ):
-            replacements.append((name, module))
-
-    if not replacements:
-        return model
-
-    print(f"Removing {len(replacements)} quantized modules...")
-
-    # Replace each quantized module
-    for name, old_module in replacements:
-        in_features = (
-            old_module.in_features
-            if hasattr(old_module, "in_features")
-            else old_module.weight.shape[1]
-        )
-        out_features = (
-            old_module.out_features
-            if hasattr(old_module, "out_features")
-            else old_module.weight.shape[0]
-        )
-        has_bias = old_module.bias is not None
-
-        # Create standard Linear
-        new_module = nn.Linear(in_features, out_features, bias=has_bias)
-
-        # Copy weights
-        with torch.no_grad():
-            if hasattr(old_module, "dequantize"):
-                try:
-                    old_module.dequantize()
-                except:
-                    pass
-            new_module.weight.data = old_module.weight.data.clone().to(torch.float16)
-            if has_bias and old_module.bias is not None:
-                new_module.bias.data = old_module.bias.data.clone().to(torch.float16)
-
-        # Replace in model
-        parent_name = ".".join(name.split(".")[:-1])
-        child_name = name.split(".")[-1]
-        parent = model.get_submodule(parent_name) if parent_name else model
-        setattr(parent, child_name, new_module)
-
-    print(f"✓ Converted to standard nn.Linear")
-    return model
-
-
 def ensure_dtype(
     model: PreTrainedModel, dtype: torch.dtype = torch.float16
 ) -> PreTrainedModel:
@@ -153,15 +86,15 @@ def ensure_dtype(
 def prepare_models_for_merging(
     base_model: PreTrainedModel,
     ft_models: List[PreTrainedModel],
-    target_dtype: torch.dtype = torch.float16,
+    target_dtype: torch.dtype = None,
 ) -> Tuple[PreTrainedModel, List[PreTrainedModel]]:
     """
-    Complete preprocessing pipeline: align vocabs, remove quantization, ensure dtype.
+    Complete preprocessing pipeline: align vocabs and ensure dtype.
 
     Args:
         base_model: Base model
         ft_models: List of fine-tuned models
-        target_dtype: Target dtype for all parameters
+        target_dtype: Target dtype for all parameters (default: None = keep current dtype)
 
     Returns:
         Tuple of (prepared_base_model, prepared_ft_models)
@@ -170,19 +103,17 @@ def prepare_models_for_merging(
     print("PREPROCESSING MODELS FOR MERGING")
     print("=" * 60)
 
-    # Step 1: Remove quantization
-    print("\n[1/3] Removing quantization...")
-    base_model = remove_quantization(base_model)
-    ft_models = [remove_quantization(m) for m in ft_models]
-
-    # Step 2: Align vocabulary sizes
-    print("\n[2/3] Aligning vocabulary sizes...")
+    # Step 1: Align vocabulary sizes
+    print("\n[1/2] Aligning vocabulary sizes...")
     base_model, ft_models = align_vocab_sizes(base_model, ft_models)
 
-    # Step 3: Ensure consistent dtype
-    print(f"\n[3/3] Converting to {target_dtype}...")
-    base_model = ensure_dtype(base_model, target_dtype)
-    ft_models = [ensure_dtype(m, target_dtype) for m in ft_models]
+    # Step 2: Ensure consistent dtype (if specified)
+    if target_dtype is not None:
+        print(f"\n[2/2] Converting to {target_dtype}...")
+        base_model = ensure_dtype(base_model, target_dtype)
+        ft_models = [ensure_dtype(m, target_dtype) for m in ft_models]
+    else:
+        print(f"\n[2/2] Keeping original dtype (no conversion)")
 
     print("\n" + "=" * 60)
     print("✓ PREPROCESSING COMPLETE - Models ready for merging")

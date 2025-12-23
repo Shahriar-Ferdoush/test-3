@@ -2,30 +2,39 @@
 
 This codebase implements TIES and DARE model merging with clean separation of concerns.
 
+**Target:** 1B-3B parameter models  
+**Merging:** CPU (FP32) - stable, no FP16 issues  
+**Inference:** GPU (FP16) - fast
+
 ## File Structure
 
 ```
-├── model_prep.py      # Preprocessing: vocab align, quantization removal, dtype conversion
+├── model_prep.py      # Preprocessing: vocab align
 ├── ties_utils.py      # Pure TIES algorithm implementation
 ├── dare_utils.py      # Pure DARE algorithm implementation
 ├── ties_llama.py      # TIES merging for LLaMA models
 ├── dare_llama.py      # DARE merging for LLaMA models
-└── model_utils.py     # Model loading and utility functions
+└── model_utils.py     # Model loading utilities
 ```
 
 ## Architecture Principles
 
 ### 1. Preprocessing (`model_prep.py`)
 
-- **Handles**: Vocab size alignment, quantization removal, dtype conversion
-- **Input**: Raw models (may have quantization, different vocabs, mixed dtypes)
-- **Output**: Clean, aligned FP16 models ready for merging
+- **Handles**: Vocab size alignment
+- **Input**: Raw models (may have different vocabs)
+- **Output**: Clean, aligned models ready for merging
 
 ### 2. Merging (`ties_llama.py`, `dare_llama.py`)
 
 - **Handles**: Pure parameter merging logic
-- **Input**: Preprocessed models (aligned vocabs, same dtype, no quantization)
-- **Output**: Merged model with same structure as base model
+- **Input**: Models loaded on CPU in FP32
+- **Output**: Merged model (saved to disk)
+
+### 3. Inference (separate step)
+
+- **Load merged model on GPU in FP16**
+- **Run fast inference**
 
 ### 3. Utils (`ties_utils.py`, `dare_utils.py`)
 
@@ -34,50 +43,96 @@ This codebase implements TIES and DARE model merging with clean separation of co
 
 ## Usage
 
-### Basic Merging (FP16 models)
+### Basic Merging (1B-3B Models)
 
 ```python
 from ties_llama import ties_merge_llama
 
+# Step 1: Merge on CPU (uses FP32, stable)
 merged = ties_merge_llama(
-    base_model_path="model/llama2-7b-fp16",
-    ft_model_paths=["model/codellama-7b-fp16", "model/metamath-7b-fp16"],
+    base_model_path="TinyLlama/TinyLlama-1.1B",
+    ft_model_paths=["model1-1b-code", "model2-1b-math"],
     weights=[0.5, 0.5],
     densities=[1.0, 1.0],
-    device="cuda",
-    use_fp16=True  # Models are already FP16
+    device="cpu"
 )
 
+# Step 2: Save merged model
 merged.save_pretrained("merged_model")
+
+# Step 3: Load on GPU for inference
+import torch
+from transformers import AutoModelForCausalLM
+
+model = AutoModelForCausalLM.from_pretrained(
+    "merged_model",
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
+```
+
+### Works with Kaggle Paths
+
+```python
+# Merge on Kaggle CPU
+merged = ties_merge_llama(
+    base_model_path="/kaggle/input/llama-3.2/transformers/1b-instruct/1",
+    ft_model_paths=[
+        "/kaggle/input/model-1/finetuned",
+        "/kaggle/input/model-2/finetuned"
+    ],
+    weights=[0.5, 0.5],
+    densities=[1.0, 1.0],
+    device="cpu"
+)
+
+# Save to working directory
+merged.save_pretrained("/kaggle/working/merged_model")
+
+# Load on GPU for inference
+model = AutoModelForCausalLM.from_pretrained(
+    "/kaggle/working/merged_model",
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
 ```
 
 ### Advanced: Manual Preprocessing
-
-If you need custom preprocessing:
 
 ```python
 from model_utils import get_llama
 from model_prep import prepare_models_for_merging
 from ties_utils import TIES
 
-# Load models
-base = get_llama("base_model", load_4bit=False)
-ft1 = get_llama("ft_model_1", load_4bit=False)
-ft2 = get_llama("ft_model_2", load_4bit=False)
+# Load models on CPU
+base = get_llama("base_model", device="cpu")
+ft1 = get_llama("ft_model_1", device="cpu")
+ft2 = get_llama("ft_model_2", device="cpu")
 
-# Preprocess (handles all edge cases)
+# Preprocess (handles vocab alignment)
 base, [ft1, ft2] = prepare_models_for_merging(base, [ft1, ft2])
 
-# Now merge manually if needed
+# Merge layer by layer
 ties = TIES()
-# ... merge layer by layer
+# ... merge manually
 ```
 
 ## What Preprocessing Handles
 
 - ✅ **Vocabulary size mismatches** → Aligns all models to minimum vocab
-- ✅ **Quantized modules** → Replaces Linear4bit with nn.Linear
-- ✅ **Mixed dtypes** → Converts all parameters to FP16 (or specified dtype)
+- ✅ **Validation** → Ensures models are compatible
+
+## Workflow
+
+```
+1. Load models on CPU (FP32)
+   ↓
+2. Merge parameters (CPU arithmetic)
+   ↓
+3. Save merged model to disk
+   ↓
+4. Load on GPU (FP16) for fast inference
+```
 - ✅ **Input embeddings** → Aligns embed_tokens with lm_head
 
 ## Design Goals

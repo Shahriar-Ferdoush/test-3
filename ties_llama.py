@@ -4,7 +4,7 @@ from typing import List
 import torch
 
 from model_prep import prepare_models_for_merging
-from model_utils import dequantize_model, find_layers, get_llama
+from model_utils import find_layers, get_llama
 from ties_utils import TIES
 
 
@@ -13,53 +13,35 @@ def ties_merge_llama(
     ft_model_paths: List[str],
     weights: List[float],
     densities: List[float],
-    device: str = "cuda",
-    use_fp16: bool = False,
+    device: str = "cpu",
 ):
     """
     Merge multiple fine-tuned LLaMA models using TIES method.
-
-    Pure merging logic - assumes models are preprocessed and aligned.
-    Use model_prep.prepare_models_for_merging() first if models have:
-    - Different vocabulary sizes
-    - Quantization
-    - Mismatched dtypes
+    
+    Merging happens on CPU in FP32 for stability.
+    Load the saved merged model on GPU for fast inference.
 
     Args:
         base_model_path: Path to the base model
         ft_model_paths: List of paths to fine-tuned models
         weights: List of weights for each fine-tuned model
         densities: List of densities for trimming each task vector
-        device: Device to use for computation
-        use_fp16: If True, load models directly in FP16 (for preprocessed models).
-                  If False, load in 4-bit and dequantize (default behavior).
+        device: Device for merging (default: "cpu", recommended)
 
     Returns:
-        Merged LLaMA model
+        Merged LLaMA model (on CPU, in FP32)
     """
     # === Load base model ===
-    if use_fp16:
-        print("Loading base model in FP16 (preprocessed)...")
-        base_model = get_llama(base_model_path, load_4bit=False, device=device)
-    else:
-        print("Loading base model in 4-bit...")
-        base_model = get_llama(base_model_path, load_4bit=True, device=device)
-        print("Dequantizing base model...")
-        dequantize_model(base_model)
+    print("Loading base model...")
+    base_model = get_llama(base_model_path, device=device)
     base_model.eval()
 
     # === Load all fine-tuned models ===
     print(f"Loading {len(ft_model_paths)} fine-tuned models...")
     ft_models = []
     for ft_path in ft_model_paths:
-        if use_fp16:
-            print(f"  → Loading {ft_path} in FP16 (preprocessed)...")
-            model = get_llama(ft_path, load_4bit=False, device=device)
-        else:
-            print(f"  → Loading {ft_path} in 4-bit...")
-            model = get_llama(ft_path, load_4bit=True, device=device)
-            print(f"  → Dequantizing {ft_path}...")
-            dequantize_model(model)
+        print(f"  → Loading {ft_path}...")
+        model = get_llama(ft_path, device=device)
         model.eval()
         ft_models.append(model)
 
