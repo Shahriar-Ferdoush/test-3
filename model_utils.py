@@ -10,7 +10,7 @@ def get_llama(
     device: str = "cpu",
 ):
     """Load a LLaMA model for merging.
-    
+
     Always loads on CPU in FP32 for stable merging operations.
     For inference, load the merged model separately on GPU.
 
@@ -33,7 +33,7 @@ def get_llama(
         low_cpu_mem_usage=True,
         local_files_only=is_local,
     )
-    
+
     model = model.to(device)
     model.seqlen = 2048
     return model

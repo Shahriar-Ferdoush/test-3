@@ -105,15 +105,18 @@ model = AutoModelForCausalLM.from_pretrained(
 ## Recommended Models (1B-3B Range)
 
 ### TinyLlama (1.1B)
+
 - Base: `TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T`
 - Chat: `TinyLlama/TinyLlama-1.1B-Chat-v1.0`
 - Python: `TinyLlama/TinyLlama-1.1B-python-v0.1`
 
 ### Phi-2 (2.7B)
+
 - Base: `microsoft/phi-2`
 - Dolphin: `cognitivecomputations/dolphin-2_6-phi-2`
 
 ### StableLM-2 (1.6B)
+
 - Base: `stabilityai/stablelm-2-1_6b`
 - Zephyr: `stabilityai/stablelm-2-zephyr-1_6b`
 
@@ -122,18 +125,18 @@ model = AutoModelForCausalLM.from_pretrained(
 **Merging (CPU, FP32):**
 
 | Model Size | Per Model | 3 Models Total | Kaggle RAM (30GB) |
-|-----------|-----------|----------------|-------------------|
-| 1B        | ~4GB      | ~12GB          | ✅ Fits           |
-| 2B        | ~8GB      | ~24GB          | ✅ Fits           |
-| 3B        | ~12GB     | ~36GB          | ❌ Too large      |
+| ---------- | --------- | -------------- | ----------------- |
+| 1B         | ~4GB      | ~12GB          | ✅ Fits           |
+| 2B         | ~8GB      | ~24GB          | ✅ Fits           |
+| 3B         | ~12GB     | ~36GB          | ❌ Too large      |
 
 **Inference (GPU, FP16):**
 
 | Model Size | GPU Memory | Kaggle GPU (16GB) |
-|-----------|------------|-------------------|
-| 1B        | ~2GB       | ✅ Fast           |
-| 2B        | ~4GB       | ✅ Fast           |
-| 3B        | ~6GB       | ✅ Fast           |
+| ---------- | ---------- | ----------------- |
+| 1B         | ~2GB       | ✅ Fast           |
+| 2B         | ~4GB       | ✅ Fast           |
+| 3B         | ~6GB       | ✅ Fast           |
 
 **Recommended:** Merge 1B-2B models on Kaggle CPU, then run inference on GPU.
 
@@ -158,11 +161,13 @@ pip install torch transformers accelerate
 ## How It Works
 
 ### TIES (TrIm, Elect Sign & Merge)
+
 1. **Trim**: Remove small updates (based on density)
 2. **Elect**: Resolve sign conflicts by voting
 3. **Merge**: Average aligned updates
 
 ### DARE (Drop And REscale)
+
 1. **Drop**: Randomly drop updates (based on density)
 2. **Rescale**: Scale remaining updates to compensate
 3. **Merge**: Combine rescaled updates
@@ -170,6 +175,7 @@ pip install torch transformers accelerate
 ## Examples
 
 See the notebooks in the repository:
+
 - `ties-dare-merging.ipynb` - Complete example with TinyLlama models
 - `fork-of-preprocess-llama.ipynb` - Preprocessing examples
 

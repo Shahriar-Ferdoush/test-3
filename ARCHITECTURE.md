@@ -133,6 +133,7 @@ ties = TIES()
    ↓
 4. Load on GPU (FP16) for fast inference
 ```
+
 - ✅ **Input embeddings** → Aligns embed_tokens with lm_head
 
 ## Design Goals
