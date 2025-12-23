@@ -156,17 +156,19 @@ class TIES:
         while len(weights.shape) < len(task_vectors_stacked.shape):
             weights = weights.unsqueeze(-1)
 
-        # Apply weights and election mask to task vectors
-        weighted_task_vectors = task_vectors_stacked * weights * elect_mask
+        # Apply election mask to task vectors (zero out disagreeing signs)
+        masked_task_vectors = task_vectors_stacked * elect_mask
+
+        # Apply weights to masked task vectors
+        weighted_task_vectors = masked_task_vectors * weights
 
         # Sum the weighted task vectors to get the final update
         merged_update = weighted_task_vectors.sum(dim=0)
 
-        # Normalize by the sum of weights where the election mask is True
-        normalization_factor = (
-            (weights * elect_mask.to(weights.dtype)).sum(dim=0).clamp(min=1e-10)
-        )  # Avoid division by zero
-        normalized_merged_update = merged_update / normalization_factor
+        # Normalize by the number of task vectors that contributed at each position
+        # Count how many task vectors passed the election at each position
+        num_contributors = elect_mask.sum(dim=0).clamp(min=1e-10)
+        normalized_merged_update = merged_update / num_contributors
 
         # Compute the final merged model parameters
         merged_model_parameters = base_model_parameters + normalized_merged_update

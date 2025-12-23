@@ -2,6 +2,7 @@ import argparse
 from typing import List
 
 import torch
+from transformers import AutoTokenizer
 
 from model_prep import prepare_models_for_merging
 from model_utils import find_layers, get_llama
@@ -89,6 +90,20 @@ def ties_merge_llama(
 
             # Write merged weights back, ensuring contiguous and on correct device
             subset[name].weight.data = merged_weights.contiguous().to(device)
+
+    # === Merge embedding layer ===
+    print("Merging embedding layer...")
+    base_embed = base_model.model.embed_tokens.weight.data
+    ft_embeds = [m.model.embed_tokens.weight.data for m in ft_models]
+
+    merged_embed = ties.merge(
+        weights=weights,
+        base_model_parameters=base_embed,
+        ft_models_parameters=ft_embeds,
+        densities=densities,
+        device=dev,
+    )
+    base_model.model.embed_tokens.weight.data = merged_embed.contiguous().to(device)
 
     # === Merge LM head ===
     print("Merging LM head...")
